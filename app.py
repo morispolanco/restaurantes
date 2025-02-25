@@ -70,7 +70,7 @@ if 'reservations' not in st.session_state:
         minute = np.random.choice([0, 15, 30, 45])
         day_offset = np.random.randint(0, 7)
         
-        reservation_time = start_date + timedelta(days=day_offset, hours=hour-12, minutes=minute)
+        reservation_time = start_date + timedelta(days=day_offset, hours=(hour-12), minutes=minute)
         party_size = np.random.randint(1, 9)
         
         example_reservations.append({
