@@ -263,7 +263,6 @@ def manage_reservations():
             filtered_df = filtered_df[filtered_df['mesa'].isna()]
         
         if not filtered_df.empty:
-            # Mostrar reservas con botones para editar y borrar
             st.write("### Lista de Reservas")
             for idx, row in filtered_df.iterrows():
                 col_a, col_b, col_c = st.columns([3, 1, 1])
@@ -276,19 +275,16 @@ def manage_reservations():
                         st.session_state.edit_reservation_id = row['id']
                 with col_c:
                     if st.button("Borrar", key=f"delete_{row['id']}"):
-                        # Liberar la mesa si está asignada
                         if pd.notna(row['mesa']):
                             st.session_state.tables.loc[
                                 st.session_state.tables['numero'] == row['mesa'], 'estado'
                             ] = "Libre"
-                        # Borrar la reserva
                         st.session_state.reservations = st.session_state.reservations[
                             st.session_state.reservations['id'] != row['id']
                         ]
                         st.success(f"Reserva ID {row['id']} borrada con éxito")
                         st.rerun()
             
-            # Formulario de edición
             if 'edit_reservation_id' in st.session_state:
                 reservation_to_edit = st.session_state.reservations[
                     st.session_state.reservations['id'] == st.session_state.edit_reservation_id
@@ -325,21 +321,18 @@ def manage_reservations():
                     if not edit_name or not edit_phone:
                         st.error("Nombre y teléfono son obligatorios")
                     else:
-                        # Liberar la mesa anterior si cambió
                         old_table = reservation_to_edit['mesa']
                         if pd.notna(old_table) and old_table != edit_table:
                             st.session_state.tables.loc[
                                 st.session_state.tables['numero'] == old_table, 'estado'
                             ] = "Libre"
                         
-                        # Actualizar la reserva
                         new_datetime = datetime.combine(edit_date, edit_time)
                         st.session_state.reservations.loc[
                             st.session_state.reservations['id'] == st.session_state.edit_reservation_id,
                             ['nombre', 'telefono', 'fecha', 'comensales', 'mesa', 'estado', 'notas']
                         ] = [edit_name, edit_phone, new_datetime, edit_size, edit_table, edit_status, edit_notes]
                         
-                        # Actualizar estado de la nueva mesa si se asignó
                         if edit_table is not None:
                             st.session_state.tables.loc[
                                 st.session_state.tables['numero'] == edit_table, 'estado'
@@ -427,106 +420,144 @@ def manage_reservations():
 def manage_tables():
     st.markdown("<div class='title'>Gestión de Mesas</div>", unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
+    tab1, tab2 = st.tabs(["Ver Mesas", "Agregar Mesa"])
     
-    with col1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("<div class='subtitle'>Mapa de Mesas</div>", unsafe_allow_html=True)
+    with tab1:
+        col1, col2 = st.columns([2, 1])
         
-        tables_df = st.session_state.tables.copy()
-        color_map = {"Libre": "green", "Ocupada": "red", "Reservada": "orange"}
-        tables_df['color'] = tables_df['estado'].map(color_map)
-        
-        tables_per_row = 5
-        tables_df['x'] = tables_df.index % tables_per_row
-        tables_df['y'] = tables_df.index // tables_per_row
-        
-        fig = go.Figure()
-        for _, table in tables_df.iterrows():
-            fig.add_trace(go.Scatter(
-                x=[table['x']],
-                y=[table['y']],
-                mode='markers+text',
-                marker=dict(
-                    size=table['capacidad'] * 5,
-                    color=table['color'],
-                    line=dict(width=2, color='white')
-                ),
-                text=[str(table['numero'])],
-                textposition="middle center",
-                hoverinfo="text",
-                hovertext=f"Mesa {table['numero']}<br>Capacidad: {table['capacidad']}<br>Estado: {table['estado']}<br>Ubicación: {table['ubicacion']}"
-            ))
-        
-        fig.update_layout(
-            showlegend=False,
-            margin=dict(l=5, r=5, t=5, b=5),
-            height=400,
-            xaxis=dict(showgrid=False, zeroline=False, visible=False),
-            yaxis=dict(showgrid=False, zeroline=False, visible=False),
-            plot_bgcolor='rgba(240,240,240,0.8)'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.markdown("🟢 Libre")
-        with col_b:
-            st.markdown("🟠 Reservada")
-        with col_c:
-            st.markdown("🔴 Ocupada")
-    
-    with col2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("<div class='subtitle'>Detalles de Mesa</div>", unsafe_allow_html=True)
-        
-        selected_table = st.selectbox(
-            "Seleccionar Mesa",
-            options=tables_df['numero'].tolist()
-        )
-        
-        if selected_table:
-            table_data = tables_df[tables_df['numero'] == selected_table].iloc[0]
+        with col1:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown("<div class='subtitle'>Mapa de Mesas</div>", unsafe_allow_html=True)
             
-            st.markdown(f"""
-            <div style="padding: 10px; border-radius: 5px; background-color: #f8f9fa;">
-                <h3>Mesa {selected_table}</h3>
-                <p><strong>Capacidad:</strong> {table_data['capacidad']} personas</p>
-                <p><strong>Ubicación:</strong> {table_data['ubicacion']}</p>
-                <p><strong>Estado:</strong> <span style="color: {color_map[table_data['estado']]};">{table_data['estado']}</span></p>
-            </div>
-            """, unsafe_allow_html=True)
+            tables_df = st.session_state.tables.copy()
+            color_map = {"Libre": "green", "Ocupada": "red", "Reservada": "orange"}
+            tables_df['color'] = tables_df['estado'].map(color_map)
             
-            table_reservations = st.session_state.reservations[
-                (st.session_state.reservations['mesa'] == selected_table) &
-                (st.session_state.reservations['fecha'].dt.date == selected_date)
-            ]
+            tables_per_row = 5
+            tables_df['x'] = tables_df.index % tables_per_row
+            tables_df['y'] = tables_df.index // tables_per_row
             
-            if not table_reservations.empty:
-                st.markdown("<p><strong>Reservas para hoy:</strong></p>", unsafe_allow_html=True)
-                for _, res in table_reservations.iterrows():
-                    st.markdown(f"""
-                    <div style="margin-top: 10px; padding: 5px 10px; border-left: 3px solid {color_map[res['estado']]};">
-                        <div><strong>{res['nombre']}</strong> - {res['comensales']} personas</div>
-                        <div>{res['fecha'].strftime('%H:%M')} | {res['estado']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.markdown("<p>No hay reservas para esta mesa hoy.</p>", unsafe_allow_html=True)
+            fig = go.Figure()
+            for _, table in tables_df.iterrows():
+                fig.add_trace(go.Scatter(
+                    x=[table['x']],
+                    y=[table['y']],
+                    mode='markers+text',
+                    marker=dict(
+                        size=table['capacidad'] * 5,
+                        color=table['color'],
+                        line=dict(width=2, color='white')
+                    ),
+                    text=[str(table['numero'])],
+                    textposition="middle center",
+                    hoverinfo="text",
+                    hovertext=f"Mesa {table['numero']}<br>Capacidad: {table['capacidad']}<br>Estado: {table['estado']}<br>Ubicación: {table['ubicacion']}"
+                ))
             
-            new_status = st.selectbox(
-                "Cambiar estado",
-                options=["Libre", "Ocupada", "Reservada"],
-                index=["Libre", "Ocupada", "Reservada"].index(table_data['estado'])
+            fig.update_layout(
+                showlegend=False,
+                margin=dict(l=5, r=5, t=5, b=5),
+                height=400,
+                xaxis=dict(showgrid=False, zeroline=False, visible=False),
+                yaxis=dict(showgrid=False, zeroline=False, visible=False),
+                plot_bgcolor='rgba(240,240,240,0.8)'
             )
             
-            if st.button("Actualizar Estado"):
-                st.session_state.tables.loc[
-                    st.session_state.tables['numero'] == selected_table, 'estado'
-                ] = new_status
-                st.success(f"Estado de mesa {selected_table} actualizado a {new_status}")
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                st.markdown("🟢 Libre")
+            with col_b:
+                st.markdown("🟠 Reservada")
+            with col_c:
+                st.markdown("🔴 Ocupada")
+        
+        with col2:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown("<div class='subtitle'>Detalles de Mesa</div>", unsafe_allow_html=True)
+            
+            selected_table = st.selectbox(
+                "Seleccionar Mesa",
+                options=tables_df['numero'].tolist()
+            )
+            
+            if selected_table:
+                table_data = tables_df[tables_df['numero'] == selected_table].iloc[0]
+                
+                st.markdown(f"""
+                <div style="padding: 10px; border-radius: 5px; background-color: #f8f9fa;">
+                    <h3>Mesa {selected_table}</h3>
+                    <p><strong>Capacidad:</strong> {table_data['capacidad']} personas</p>
+                    <p><strong>Ubicación:</strong> {table_data['ubicacion']}</p>
+                    <p><strong>Estado:</strong> <span style="color: {color_map[table_data['estado']]};">{table_data['estado']}</span></p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                table_reservations = st.session_state.reservations[
+                    (st.session_state.reservations['mesa'] == selected_table) &
+                    (st.session_state.reservations['fecha'].dt.date == selected_date)
+                ]
+                
+                if not table_reservations.empty:
+                    st.markdown("<p><strong>Reservas para hoy:</strong></p>", unsafe_allow_html=True)
+                    for _, res in table_reservations.iterrows():
+                        st.markdown(f"""
+                        <div style="margin-top: 10px; padding: 5px 10px; border-left: 3px solid {color_map[res['estado']]};">
+                            <div><strong>{res['nombre']}</strong> - {res['comensales']} personas</div>
+                            <div>{res['fecha'].strftime('%H:%M')} | {res['estado']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.markdown("<p>No hay reservas para esta mesa hoy.</p>", unsafe_allow_html=True)
+                
+                new_status = st.selectbox(
+                    "Cambiar estado",
+                    options=["Libre", "Ocupada", "Reservada"],
+                    index=["Libre", "Ocupada", "Reservada"].index(table_data['estado'])
+                )
+                
+                if st.button("Actualizar Estado"):
+                    st.session_state.tables.loc[
+                        st.session_state.tables['numero'] == selected_table, 'estado'
+                    ] = new_status
+                    st.success(f"Estado de mesa {selected_table} actualizado a {new_status}")
+                    st.rerun()
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+    with tab2:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("<div class='subtitle'>Agregar Nueva Mesa</div>", unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            new_table_number = st.number_input("Número de Mesa", min_value=1, value=int(st.session_state.tables['numero'].max() + 1) if not st.session_state.tables.empty else 1, step=1)
+            new_capacity = st.number_input("Capacidad", min_value=1, max_value=20, value=4)
+        
+        with col2:
+            new_location = st.selectbox("Ubicación", ["Interior", "Exterior", "Terraza"])
+            new_status = st.selectbox("Estado Inicial", ["Libre", "Ocupada", "Reservada"], index=0)
+        
+        if st.button("Agregar Mesa"):
+            # Verificar si el número de mesa ya existe
+            if new_table_number in st.session_state.tables['numero'].values:
+                st.error(f"La mesa número {new_table_number} ya existe. Por favor, elija otro número.")
+            else:
+                new_table = pd.DataFrame([{
+                    "numero": new_table_number,
+                    "capacidad": new_capacity,
+                    "ubicacion": new_location,
+                    "estado": new_status
+                }])
+                
+                st.session_state.tables = pd.concat(
+                    [st.session_state.tables, new_table],
+                    ignore_index=True
+                )
+                st.success(f"Mesa {new_table_number} agregada con éxito")
                 st.rerun()
         
         st.markdown("</div>", unsafe_allow_html=True)
