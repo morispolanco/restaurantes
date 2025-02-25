@@ -116,7 +116,6 @@ def show_dashboard():
     daily_reservations = st.session_state.reservations[(st.session_state.reservations['fecha'] >= selected_datetime) & 
                                                      (st.session_state.reservations['fecha'] < next_day)].copy()
     
-    # Métricas principales
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -147,7 +146,6 @@ def show_dashboard():
         st.markdown("<div class='metric-label'>Reservas Confirmadas</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # Gráficos
     col1, col2 = st.columns(2)
     
     with col1:
@@ -178,7 +176,6 @@ def show_dashboard():
         st.plotly_chart(fig, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
     
-    # Próximas reservas
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>Próximas Reservas</div>", unsafe_allow_html=True)
     
@@ -266,25 +263,95 @@ def manage_reservations():
             filtered_df = filtered_df[filtered_df['mesa'].isna()]
         
         if not filtered_df.empty:
-            st.dataframe(
-                filtered_df[['id', 'nombre', 'fecha', 'comensales', 'mesa', 'estado', 'telefono', 'notas']],
-                column_config={
-                    "id": "ID",
-                    "nombre": "Nombre",
-                    "fecha": st.column_config.DatetimeColumn("Fecha y Hora", format="DD/MM/YYYY HH:mm"),
-                    "comensales": "Comensales",
-                    "mesa": "Mesa",
-                    "estado": st.column_config.SelectboxColumn(
-                        "Estado",
-                        options=["Confirmada", "Pendiente", "Completada", "Cancelada"]
-                    ),
-                    "telefono": "Teléfono",
-                    "notas": "Notas"
-                },
-                hide_index=True,
-                use_container_width=True,
-                height=400
-            )
+            # Mostrar reservas con botones para editar y borrar
+            st.write("### Lista de Reservas")
+            for idx, row in filtered_df.iterrows():
+                col_a, col_b, col_c = st.columns([3, 1, 1])
+                with col_a:
+                    st.write(f"ID: {row['id']} | {row['nombre']} | {row['fecha'].strftime('%d/%m/%Y %H:%M')} | "
+                            f"{row['comensales']} personas | Mesa: {row['mesa'] if pd.notna(row['mesa']) else 'Sin asignar'} | "
+                            f"{row['estado']}")
+                with col_b:
+                    if st.button("Editar", key=f"edit_{row['id']}"):
+                        st.session_state.edit_reservation_id = row['id']
+                with col_c:
+                    if st.button("Borrar", key=f"delete_{row['id']}"):
+                        # Liberar la mesa si está asignada
+                        if pd.notna(row['mesa']):
+                            st.session_state.tables.loc[
+                                st.session_state.tables['numero'] == row['mesa'], 'estado'
+                            ] = "Libre"
+                        # Borrar la reserva
+                        st.session_state.reservations = st.session_state.reservations[
+                            st.session_state.reservations['id'] != row['id']
+                        ]
+                        st.success(f"Reserva ID {row['id']} borrada con éxito")
+                        st.rerun()
+            
+            # Formulario de edición
+            if 'edit_reservation_id' in st.session_state:
+                reservation_to_edit = st.session_state.reservations[
+                    st.session_state.reservations['id'] == st.session_state.edit_reservation_id
+                ].iloc[0]
+                
+                st.write("### Editar Reserva")
+                edit_col1, edit_col2 = st.columns(2)
+                
+                with edit_col1:
+                    edit_name = st.text_input("Nombre del cliente", value=reservation_to_edit['nombre'], key="edit_name")
+                    edit_phone = st.text_input("Teléfono", value=reservation_to_edit['telefono'], key="edit_phone")
+                    edit_size = st.number_input("Número de comensales", min_value=1, max_value=20, 
+                                              value=int(reservation_to_edit['comensales']), key="edit_size")
+                
+                with edit_col2:
+                    edit_date = st.date_input("Fecha de reserva", value=reservation_to_edit['fecha'].date(), key="edit_date")
+                    edit_time = st.time_input("Hora", value=reservation_to_edit['fecha'].time(), key="edit_time")
+                    edit_status = st.selectbox("Estado", ["Confirmada", "Pendiente", "Completada", "Cancelada"],
+                                             index=["Confirmada", "Pendiente", "Completada", "Cancelada"].index(reservation_to_edit['estado']),
+                                             key="edit_status")
+                
+                edit_table = st.selectbox(
+                    "Mesa (opcional)",
+                    options=[None] + st.session_state.tables[
+                        st.session_state.tables['estado'] == "Libre"
+                    ]['numero'].tolist(),
+                    index=0 if pd.isna(reservation_to_edit['mesa']) else 
+                          st.session_state.tables[st.session_state.tables['estado'] == "Libre"]['numero'].tolist().index(reservation_to_edit['mesa']) + 1 if reservation_to_edit['mesa'] in st.session_state.tables[st.session_state.tables['estado'] == "Libre"]['numero'].tolist() else 0,
+                    key="edit_table"
+                )
+                edit_notes = st.text_area("Notas adicionales", value=reservation_to_edit['notas'], key="edit_notes")
+                
+                if st.button("Guardar Cambios", key="save_edit"):
+                    if not edit_name or not edit_phone:
+                        st.error("Nombre y teléfono son obligatorios")
+                    else:
+                        # Liberar la mesa anterior si cambió
+                        old_table = reservation_to_edit['mesa']
+                        if pd.notna(old_table) and old_table != edit_table:
+                            st.session_state.tables.loc[
+                                st.session_state.tables['numero'] == old_table, 'estado'
+                            ] = "Libre"
+                        
+                        # Actualizar la reserva
+                        new_datetime = datetime.combine(edit_date, edit_time)
+                        st.session_state.reservations.loc[
+                            st.session_state.reservations['id'] == st.session_state.edit_reservation_id,
+                            ['nombre', 'telefono', 'fecha', 'comensales', 'mesa', 'estado', 'notas']
+                        ] = [edit_name, edit_phone, new_datetime, edit_size, edit_table, edit_status, edit_notes]
+                        
+                        # Actualizar estado de la nueva mesa si se asignó
+                        if edit_table is not None:
+                            st.session_state.tables.loc[
+                                st.session_state.tables['numero'] == edit_table, 'estado'
+                            ] = "Reservada"
+                        
+                        st.success(f"Reserva ID {st.session_state.edit_reservation_id} actualizada con éxito")
+                        del st.session_state.edit_reservation_id
+                        st.rerun()
+                
+                if st.button("Cancelar Edición", key="cancel_edit"):
+                    del st.session_state.edit_reservation_id
+                    st.rerun()
         else:
             st.info("No hay reservas que coincidan con los filtros seleccionados.")
     
