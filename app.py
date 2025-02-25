@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # Configuración de la página
 st.set_page_config(page_title="Sistema de Gestión de Restaurante", page_icon="🍽️", layout="wide")
 
-# Estilos CSS (sin cambios)
+# Estilos CSS
 st.markdown("""
 <style>
     .main {
@@ -55,7 +55,6 @@ st.markdown("""
 
 # Inicializar estado de sesión para datos si no existe
 if 'reservations' not in st.session_state:
-    # Crear algunos datos de ejemplo
     start_date = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
     example_reservations = []
     
@@ -67,7 +66,7 @@ if 'reservations' not in st.session_state:
         minute = np.random.choice([0, 15, 30, 45])
         day_offset = np.random.randint(0, 7)
         
-        reservation_time = start_date + timedelta(days=day_offset, hours=(hour-12), minutes=minute)
+        reservation_time = start_date.replace(hour=hour, minute=minute) + timedelta(days=day_offset)
         party_size = np.random.randint(1, 9)
         
         example_reservations.append({
